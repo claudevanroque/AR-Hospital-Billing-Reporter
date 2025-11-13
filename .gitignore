@@ -1,0 +1,13 @@
+/.venv
+__pycache__
+.venv
+
+.env
+
+AUDIT/
+MAM_ANN/
+others/
+RECEIVABLES/
+
+
+*.xlsx

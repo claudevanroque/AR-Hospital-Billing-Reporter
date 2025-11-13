@@ -1,0 +1,476 @@
+WITH PaymentSummary AS (
+    SELECT 
+        AR_PD.HOSPITALRECORDID,
+        AR_P.HMOID,
+        INS.INSURANCETYPE,
+        AR_P.HOSPAMOUNT,
+        AR_P.HOSPTAX,
+        AR_P.ID AS PaymentID,
+        AR_P.REFERENCE,
+        INS.NAME AS InsuranceName,
+        AR_P.REMARKS
+    FROM AR_IPDOPDPYMNTDETAIL AS AR_PD
+    JOIN AR_IPDOPDPAYMENT AR_P ON AR_P.ID = AR_PD.HEADERID
+    JOIN HIS_INSURANCES INS ON INS.ID = AR_P.HMOID
+   -- WHERE AR_PD.HOSPITALRECORDID = 125460
+)
+
+
+SELECT DISTINCT
+    HR.ADMISSIONTYPE,
+    HR.ID AS HOSPRECNO,
+    CAST(HR.DATETIMEADMITTED AS DATE) AS ADMITTED,
+    CAST(coalesce(HR.DATETIMEDISCHARGED, HR.DATETIMEADMITTED) AS DATE) AS DISCHARGED,
+    -- FORMAT(HR.DATETIMEADMITTED, 'MM/dd/yy') + ' - ' + FORMAT(HR.DATETIMEDISCHARGED, 'MM/dd/yy') AS CONFINEMENT,
+    -- LTRIM(RTRIM(HR.LASTNAME)) AS LASTNAME,
+    CONCAT(LTRIM(RTRIM(HR.LASTNAME)), ', ', LTRIM(RTRIM(HR.FIRSTNAME))) AS PATIENT,
+    HOS_BILL.TotalHOSAmount AS GROSS,
+    HOS_BILL.TotalDiscount AS DISCOUNT,
+    HOS_BILL.TotalPHICAmount AS ARPHIC,
+
+
+    HOS_BILL.TotalPHICWH as "ARPHIC (WH)",
+    HOS_BILL.TotalActualPayment as "ACTUAL PHIC",
+
+    AR_PHICPAYMENTDETAIL.Paid as PHIC_PAID,
+    AR_PHICPAYMENTDETAIL.Paid_WH as "PHIC_WH TAX Source",
+    AR_PHICPAYMENTDETAIL.ActualPaid as "PHIC_ACTUAL PAID",
+    ISNULL(HOS_BILL.TotalPHICAmount - AR_PHICPAYMENTDETAIL.Paid, 0) AS "ARPHIC BALANCE",
+    ISNULL(HOS_BILL.TotalPHICWH - AR_PHICPAYMENTDETAIL.Paid_WH, 0) AS "ARPHIC (WH) BALANCE",
+    ISNULL(HOS_BILL.TotalActualPayment -AR_PHICPAYMENTDETAIL.ActualPaid , 0 ) AS "ACTUAL PHIC BALANCE",
+    LTRIM(RTRIM(AR_PHICPAYMENT.Ref)) AS PHIC_RECEIPT,
+    LTRIM(RTRIM(AR_PHICPAYMENT.Remark)) AS PHIC_REMARKS,
+
+
+    AR_PD.CompanyName AS "COMPANY NAME",
+    HOS_BILL.TotalCompAmount as ARCOMP,
+    HOS_BILL.TotalCompWH as "ARCOMP (WH)",
+    HOS_BILL.TotalActualPaymentComp as "ACTUAL COMP",
+    AR_PD.CompanyAmount AS COMP_PAID,
+    AR_PD.Paid_WH_Company AS "COMP_WH TAX Source",
+    AR_PD.ActualPaid_Company as "COMP_ACTUAL PAID",
+    HOS_BILL.TotalCompAmount - AR_PD.CompanyAmount AS "COMP BALANCE",
+    HOS_BILL.TotalCompWH - AR_PD.Paid_WH_Company AS "COMP (WH) BALANCE",
+    HOS_BILL.TotalActualPaymentComp - AR_PD.ActualPaid_Company AS "ACTUAL COMP BALANCE",
+    LTRIM(RTRIM(AR_PD.CompanyRef)) AS COMP_RECEIPT,
+    LTRIM(RTRIM(AR_PD.CompanyRemarks)) AS COMP_REMARKS,
+    
+
+    AR_PD.HMOName AS "HEALTH ORG",
+    HOS_BILL.TotalHMOAmout as ARHMO,
+    HOS_BILL.TotalHMOWH AS "ARHMO (WH)",
+    HOS_BILL.TotalActualPaymentHMO AS "ACTUAL HMO",
+    AR_PD.HMOAmount AS HMO_PAID,
+    AR_PD.Paid_WH_HMO AS "HMO_WH TAX Source",
+    AR_PD.ActualPaid_HMO as "HMO_ACTUAL PAID",
+    HOS_BILL.TotalHMOAmout - AR_PD.HMOAmount AS "HMO BALANCE",
+    HOS_BILL.TotalHMOWH - AR_PD.Paid_WH_HMO AS "HMO (WH) BALANCE",
+    HOS_BILL.TotalActualPaymentHMO - AR_PD.ActualPaid_HMO AS "ACTUAL HMO BALANCE",
+    LTRIM(RTRIM(AR_PD.HMORef)) AS HMO_RECEIPT,
+    LTRIM(RTRIM(AR_PD.HMORemarks)) AS HMO_REMARKS,
+
+    HOS_BILL.TotalPersonalAmount AS ARPERSONAL,
+    HOS_BILL.TotalPersonalAmount + HOS_BILL.TotalDiscount AS "ARPERSONAL (GROSS)",
+    HOS_BILL.TotalDiscount AS "ARPERSONAL (DISC) 1",
+    HIS_DISCOUNT.AMOUNT AS "ARPERSONAL (DISC) 2",
+    HOS_BILL.TotalPersonalAmount AS "ARPERSONAL NET",
+    --HOS_BILL.TotalPersonalAmount - HOS_BILL.TotalDiscount AS "ARPERSONAL NET",
+    HOS_BILL.TotalPersonalWH AS "ARPERSONAL (WH)",
+    HOS_BILL.TotalActualPaymentPersonal AS "ACTUAL PERSONAL",
+    C_SH.ActualPaid AS " PER_ACTUAL PAID",
+    C_SH.TotalDeposit AS "DEPOSIT",
+    C_SH.TotalPaid AS "PAIDAMOUNT",
+    C_SH.Paid_WH as "PER_TOTAL WH TAX Source",
+    C_SH.TotalActualPaid as "PER_TOTAL ACTUAL PAID",
+    HOS_BILL.TotalPersonalAmount - C_SH.ActualPaid AS "PERSONAL BALANCE",
+    LTRIM(RTRIM(C_SH.Ref)) as PER_RECEIPT,
+    LTRIM(RTRIM(C_SH.Remarks)) as PER_REMARKS,
+
+    H_PF.BilledPF as "GROSS BILLED TO DOCTOR",                           -- pfamount
+    H_PF.BilledPF_WH as "WH @ Source",                                   -- wh@ source
+    H_PF.NetBilledPF AS "(NET) BILLED TO DOCTOR",                        -- net amount
+    NULL AS "WH Tax Bill",                                               -- wh tax paid
+    C_PF.PaymentPF AS "TOTAL PAYMENTS",                                  -- pf paid
+    NULL AS "WH Tax Paid",                                               -- wh tax paid
+    C_PF.PaymentPF_WH AS "PF Paid (WH)",                                 -- pf paid (WH)
+    H_PF.BilledPF - C_PF.PaymentPF  AS "BILLED TO DOCTOR",                -- pf bal
+
+
+
+    ---------------------------------------------------------------------------------------------------------------
+    
+    HOS_BILL.ICU AS ICU,
+    HOS_BILL.STATION_CHARGES AS "STATION CHARGES",
+    HOS_BILL.MEDICINE AS MEDICINE,
+    HOS_BILL.ROOM_AND_BOARD AS "ROOM AND BOARD",
+    HOS_BILL.OR_CHARGES AS "OR CHARGES",
+    HOS_BILL.NICU AS NICU,
+    HOS_BILL.CENTRAL_SUPPLIES AS "CENTRAL SUPPLIES",
+    HOS_BILL.ER_CHARGES AS "ER CHARGES",
+    HOS_BILL.LABORATORY AS LABORATORY,
+    
+    HOS_BILL.DELIVERY_ROOM AS "DELIVERY ROOM",
+    HOS_BILL.HOME_MEDICINES AS "HOME MEDICINES",
+    HOS_BILL.HEMODIALYSIS_CHARGES AS "HEMODIALYSIS CHARGES",
+    HOS_BILL.CHARGES AS CHARGES,
+    HOS_BILL.PHOTOCOPIER AS PHOTOCOPIER,
+    HOS_BILL.ADMITTING_CHARGE AS "ADMITTING CHARGE",
+    HOS_BILL.APE AS "A.P.E. Other Charges",
+    HOS_BILL.MIS_CHARGES AS "MISCELLANEOUS CHARGES",
+    HOS_BILL.ADMIN AS ADMIN,
+    HOS_BILL.MED_OX AS "MEDICAL OXYGEN",
+    HOS_BILL.CANTEEN AS CANTEEN,
+    HOS_BILL.ENDOSCOPY AS ENDOSCOPY,
+    HOS_BILL.PURCHASING AS PURCHASING,
+    HOS_BILL.DIETARY AS DIETARY,
+    HOS_BILL.OR_DR AS "OR/DR FEE",
+    HOS_BILL.NURSE AS "NURSING SERVICE - OTHER",
+    HOS_BILL.LINEN AS LINEN,
+    HOS_BILL.BUSINESS AS "BUSINESS OFFICE-MISC",
+    HOS_BILL.JANITORIAL AS JANITORIAL,
+    HOS_BILL.HRD AS HRD,
+    HOS_BILL.HOS_EQ AS "HOSPITAL EQUIPMENT",
+    HOS_BILL.OFF_SUPP AS "OFFICE SUPPLIES",
+    HOS_BILL.HEART AS "HEART CENTER CHARGES",
+    HOS_BILL.EYE AS "EYE CENTER CHARGES",
+    HOS_BILL.NUCLEAR AS "NUCLEAR CHARGES",
+    HOS_BILL.ECG AS ECG,
+    HOS_BILL.MACHINE_USE AS "USE OF MACHINE",
+    HOS_BILL.DISPENSARY AS "DISPENSARY CHARGES",
+    HOS_BILL.CHEMO AS "CHEMOTHERAPY CHARGES",
+    HOS_BILL.DR_CHARGES AS "DR CHARGES",
+    HOS_BILL.MAINTENANCE AS "MAINTENANCE",
+    HOS_BILL.DIABETES_CONSULT AS "DIABETES CONSULTATION",
+    
+    RAD.CTSCAN,
+    RAD.MAMMOGRAM,
+    RAD.MRI,
+    RAD.UTZ AS ULTRASOUND,
+    RAD.XRAY,
+    HOS_BILL.KONSULTA AS KONSULTA,
+    --HOS_BILL.RADIOLOGY AS RADIOLOGY,
+
+    -- HOS_BILL.GROSS_SERVICES  + RAD.XRAY + RAD.UTZ + RAD.MRI +  RAD.MAMMOGRAM + RAD.CTSCAN AS "GROSS SERVICES",
+    -- HOS_BILL.TotalHOSAmount AS "GROSS BILL"
+    -- HOS_BILL.TotalPersonalAmount + HOS_BILL.TotalHMOAmout + HOS_BILL.TotalCompAmount + HOS_BILL.TotalPHICAmount AS PAYMENT,
+    -- HOS_BILL.TotalHOSAmount - (HOS_BILL.TotalPersonalAmount + HOS_BILL.TotalHMOAmout + HOS_BILL.TotalCompAmount + HOS_BILL.TotalPHICAmount) AS HOS_BAL,
+    -- (HOS_BILL.GROSS_SERVICES + RAD.XRAY + RAD.UTZ + RAD.MRI +  RAD.MAMMOGRAM + RAD.CTSCAN) - HOS_BILL.TotalHOSAmount AS DIFF --BILL AND SERVICES
+    
+
+    ------------------------------REMAINING BALANCES ----------------------------------------------
+    HOS_BILL.TotalPersonalAmount AS A_HOS_BILL,
+    H_PF.BilledPF AS A_PF_BILL,
+    HOS_BILL.TotalPersonalAmount + H_PF.BilledPF AS "A_TOTAL BILL",
+    COALESCE(C_SH.ActualPaid, 0)  AS "A_TOTAL PAID",
+    COALESCE(HIS_DISCOUNT.AMOUNT, 0) AS "A_TOTAL DISC",
+    (HOS_BILL.TotalPersonalAmount + H_PF.BilledPF) - (COALESCE(C_SH.ActualPaid, 0) + COALESCE(HIS_DISCOUNT.AMOUNT, 0)) AS "REMAINING BAL"
+
+
+
+
+
+FROM HIS_HOSPITALRECORD HR
+    RIGHT JOIN (
+        SELECT 
+            HOSPITALRECORDID,
+        
+            SUM(AMOUNT) AS TotalHOSAmount,
+            SUM(DISCOUNTAMOUNT) AS TotalDiscount,
+            SUM(PHICAMOUNT) AS TotalPHICAmount,
+            SUM(PHICAMOUNT) * 0.02 AS TotalPHICWH,
+            SUM(PHICAMOUNT) - (SUM(PHICAMOUNT) * 0.02) AS TotalActualPayment,
+
+            SUM(COMPAMOUNT) AS TotalCompAmount,
+            SUM(COMPAMOUNT) * 0.02 AS TotalCompWH,
+            SUM(COMPAMOUNT) - (SUM(COMPAMOUNT) * 0.02) as TotalActualPaymentComp,
+
+            SUM(HMOAMOUNT) AS TotalHMOAmout,
+            SUM(HMOAMOUNT) * 0.02 as TotalHMOWH,
+            SUM(HMOAMOUNT) - (SUM(HMOAMOUNT) * 0.02) AS TotalActualPaymentHMO,
+
+            ROUND(SUM(PERSONALAMOUNT),2) AS TotalPersonalAmount,
+            ROUND(SUM(PERSONALAMOUNT), 2) * 0.02 AS TotalPersonalWH,
+            ROUND(SUM(PERSONALAMOUNT), 2) - (ROUND(SUM(PERSONALAMOUNT), 2) *0.02) AS TotalActualPaymentPersonal,
+
+
+
+            -------------------------------------------------------------------------
+            SUM(CASE WHEN SOAID = 1 THEN AMOUNT ELSE 0 END) AS ICU,
+            SUM(CASE WHEN SOAID = 2 THEN AMOUNT ELSE 0 END) AS STATION_CHARGES,
+            SUM(CASE WHEN SOAID = 4 THEN AMOUNT ELSE 0 END) AS MEDICINE,
+            SUM(CASE WHEN SOAID = 5 THEN AMOUNT ELSE 0 END) AS ROOM_AND_BOARD,
+            SUM(CASE WHEN SOAID = 6 THEN AMOUNT ELSE 0 END) AS OR_CHARGES,
+            SUM(CASE WHEN SOAID = 7 THEN AMOUNT ELSE 0 END) AS NICU,
+            SUM(CASE WHEN SOAID = 8 THEN AMOUNT ELSE 0 END) AS CENTRAL_SUPPLIES,
+            SUM(CASE WHEN SOAID = 9 THEN AMOUNT ELSE 0 END) AS ER_CHARGES,
+            SUM(CASE WHEN SOAID = 10 THEN AMOUNT ELSE 0 END) AS LABORATORY,
+            --SUM(CASE WHEN SOAID = 11 THEN AMOUNT ELSE 0 END) AS RADIOLOGY,
+            SUM(CASE WHEN SOAID = 14 THEN AMOUNT ELSE 0 END) AS DELIVERY_ROOM,
+            SUM(CASE WHEN SOAID = 16 THEN AMOUNT ELSE 0 END) AS HOME_MEDICINES,
+            SUM(CASE WHEN SOAID = 23 THEN AMOUNT ELSE 0 END) AS HEMODIALYSIS_CHARGES,
+            SUM(CASE WHEN SOAID = 27 THEN AMOUNT ELSE 0 END) AS CHARGES,
+            SUM(CASE WHEN SOAID = 28 THEN AMOUNT ELSE 0 END) AS PHOTOCOPIER,
+            SUM(CASE WHEN SOAID = 29 THEN AMOUNT ELSE 0 END) AS ADMITTING_CHARGE,
+            SUM(CASE WHEN SOAID = 30 THEN AMOUNT ELSE 0 END) AS APE,
+            SUM(CASE WHEN SOAID = 31 THEN AMOUNT ELSE 0 END) AS MIS_CHARGES,
+            SUM(CASE WHEN SOAID = 32 THEN AMOUNT ELSE 0 END) AS ADMIN,
+            SUM(CASE WHEN SOAID = 33 THEN AMOUNT ELSE 0 END) AS MED_OX,
+            SUM(CASE WHEN SOAID = 35 THEN AMOUNT ELSE 0 END) AS CANTEEN,
+            SUM(CASE WHEN SOAID = 36 THEN AMOUNT ELSE 0 END) AS ENDOSCOPY,
+            SUM(CASE WHEN SOAID = 37 THEN AMOUNT ELSE 0 END) AS PURCHASING,
+            SUM(CASE WHEN SOAID = 38 THEN AMOUNT ELSE 0 END) AS DIETARY,
+            SUM(CASE WHEN SOAID = 39 THEN AMOUNT ELSE 0 END) AS OR_DR,
+            SUM(CASE WHEN SOAID = 40 THEN AMOUNT ELSE 0 END) AS NURSE,
+            SUM(CASE WHEN SOAID = 41 THEN AMOUNT ELSE 0 END) AS LINEN,
+            SUM(CASE WHEN SOAID = 42 THEN AMOUNT ELSE 0 END) AS BUSINESS,
+            SUM(CASE WHEN SOAID = 43 THEN AMOUNT ELSE 0 END) AS JANITORIAL,
+            SUM(CASE WHEN SOAID = 44 THEN AMOUNT ELSE 0 END) AS HRD,
+            SUM(CASE WHEN SOAID = 45 THEN AMOUNT ELSE 0 END) AS HOS_EQ,
+            SUM(CASE WHEN SOAID = 46 THEN AMOUNT ELSE 0 END) AS OFF_SUPP,
+            SUM(CASE WHEN SOAID = 47 THEN AMOUNT ELSE 0 END) AS HEART,
+            SUM(CASE WHEN SOAID = 48 THEN AMOUNT ELSE 0 END) AS EYE,
+            SUM(CASE WHEN SOAID = 49 THEN AMOUNT ELSE 0 END) AS NUCLEAR,
+            SUM(CASE WHEN SOAID = 50 THEN AMOUNT ELSE 0 END) AS ECG,
+            SUM(CASE WHEN SOAID = 51 THEN AMOUNT ELSE 0 END) AS MACHINE_USE,
+            SUM(CASE WHEN SOAID = 52 THEN AMOUNT ELSE 0 END) AS DISPENSARY,
+            SUM(CASE WHEN SOAID = 54 THEN AMOUNT ELSE 0 END) AS CHEMO,
+            SUM(CASE WHEN SOAID = 55 THEN AMOUNT ELSE 0 END) AS DR_CHARGES,
+            SUM(CASE WHEN SOAID = 56 THEN AMOUNT ELSE 0 END) AS MAINTENANCE,
+            SUM(CASE WHEN SOAID = 58 THEN AMOUNT ELSE 0 END) AS DIABETES_CONSULT,
+            SUM(CASE WHEN SOAID = 60 THEN AMOUNT ELSE 0 END) AS KONSULTA,
+            --CTSCAN,
+            --MAMMOGRAM,
+            --MRI,
+            --ULTRASOUND,
+            --XRAY
+
+            SUM(CASE WHEN SOAID IN (1, 2, 4, 5, 6, 7, 8, 9, 10, 14, 16, 23, 27, 28, 29, 30, 31, 32, 33, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 54, 55, 56, 58, 60) THEN AMOUNT ELSE 0 END) AS GROSS_SERVICES
+
+            
+        FROM HIS_BILLINGRECORD
+        GROUP BY HOSPITALRECORDID
+    ) HOS_BILL ON HR.ID = HOS_BILL.HOSPITALRECORDID
+
+    ---------------------------------- RADIOLOGY ------------------------------------
+
+
+LEFT JOIN (
+    SELECT 
+        SUM(CASE WHEN SD.GL_ACCTID IN(167, 171) THEN SD.PRICE - SD.PFAMOUNT ELSE 0 END) AS XRAY, --(IPD, OPD)
+        SUM(CASE WHEN SD.GL_ACCTID IN(164, 168) THEN SD.PRICE - SD.PFAMOUNT ELSE 0 END) AS CTSCAN,
+        SUM(CASE WHEN SD.GL_ACCTID IN(166, 170) THEN SD.PRICE - SD.PFAMOUNT ELSE 0 END) AS UTZ,
+        SUM(CASE WHEN SD.GL_ACCTID IN(165, 169) THEN SD.PRICE - SD.PFAMOUNT ELSE 0 END) AS MRI,
+        SUM(CASE WHEN SD.GL_ACCTID IN(172, 173) THEN SD.PRICE - SD.PFAMOUNT ELSE 0 END) AS MAMMOGRAM,
+        S.REFID
+    FROM HIS_SALESDETAIL SD 
+    JOIN HIS_SALES S ON S.ID = SD.HEADERID
+
+    WHERE S.CANCELLED ='N'
+    GROUP BY S.REFID
+) RAD ON RAD.REFID = HOS_BILL.HOSPITALRECORDID
+
+
+    
+    ---------------------------------- PHILHEALTH ------------------------------------
+
+    LEFT JOIN(
+        SELECT
+            HOSPITALRECORDID
+
+        FROM AR_PHICTRANSDETAIL
+        GROUP BY HOSPITALRECORDID
+    ) AR_PHICPAY ON HOS_BILL.HOSPITALRECORDID = AR_PHICPAY.HOSPITALRECORDID
+
+    LEFT JOIN (
+        SELECT
+            HOSPITALRECORDID,
+            HEADERID,
+            --SUM(EWTAX) AS EWTAX,
+            --SUM(CPPDHOSTAMNT) - SUM(EWTAX) AS ActualPaid,
+            SUM(CPHOSTAMNT) AS Paid,
+            SUM(CPHOSTAMNT) * 0.02 AS Paid_WH,
+            SUM(CPHOSTAMNT) * 0.98 AS ActualPaid,
+
+            
+            ROW_NUMBER() OVER (PARTITION BY HOSPITALRECORDID ORDER BY HEADERID) AS RN
+        FROM AR_PHICPAYMENTDETAIL
+        GROUP BY HOSPITALRECORDID, HEADERID, PFDD
+    ) AR_PHICPAYMENTDETAIL ON AR_PHICPAY.HOSPITALRECORDID = AR_PHICPAYMENTDETAIL.HOSPITALRECORDID
+        AND AR_PHICPAYMENTDETAIL.RN = 1
+
+
+    LEFT JOIN (
+        SELECT 
+            ID,
+            STUFF((
+                SELECT LTRIM(RTRIM(REFERENCE))
+                FROM AR_PHICPAYMENT AS Sub
+                WHERE Sub.ID = Main.ID -- Correlation using alias
+                FOR XML PATH(''), TYPE
+            ).value('.', 'NVARCHAR(MAX)'), 1, 2, ' ') AS Ref,
+
+            STUFF((
+                SELECT LTRIM(RTRIM(REMARKS))
+                FROM AR_PHICPAYMENT AS Sub
+                WHERE Sub.ID = Main.ID 
+                FOR XML PATH(''), TYPE
+            ).value('.', 'NVARCHAR(MAX)'), 1, 2, ' ') AS Remark
+
+        FROM AR_PHICPAYMENT AS Main
+        GROUP BY ID
+    ) AR_PHICPAYMENT ON AR_PHICPAYMENTDETAIL.HEADERID = AR_PHICPAYMENT.ID
+
+
+--------------------------------------- comp & hmo ---------------------------------------
+--separate payments from the values requiring 'insurancetype'
+LEFT JOIN(
+    SELECT 
+        MIN(p.PaymentID) AS ID,
+        p.HOSPITALRECORDID,
+        MIN(p.HMOID) AS HMOID,
+        MIN(p.PaymentID) AS HEADERID,
+        SUM(CASE WHEN p.INSURANCETYPE = 'H' THEN p.HOSPAMOUNT ELSE 0 END) AS HMOAmount,
+        SUM(CASE WHEN p.INSURANCETYPE = 'C' THEN p.HOSPAMOUNT ELSE 0 END) AS CompanyAmount,
+
+        SUM(CASE WHEN p.INSURANCETYPE = 'H' THEN p.HOSPTAX ELSE 0 END) AS Paid_WH_HMO,
+        SUM(CASE WHEN p.INSURANCETYPE = 'C' THEN p.HOSPTAX ELSE 0 END) AS Paid_WH_Company,
+
+        SUM(CASE WHEN p.INSURANCETYPE = 'H' THEN p.HOSPAMOUNT - p.HOSPTAX ELSE 0 END) AS ActualPaid_HMO,
+        SUM(CASE WHEN p.INSURANCETYPE = 'C' THEN p.HOSPAMOUNT - p.HOSPTAX ELSE 0 END) AS ActualPaid_Company,
+
+        --------------------------------- insurance name ---------------------------------------
+        STUFF((
+            SELECT ', ' + LTRIM(RTRIM(Sub.InsuranceName))
+            FROM PaymentSummary Sub
+            WHERE Sub.HOSPITALRECORDID = p.HOSPITALRECORDID
+            AND Sub.INSURANCETYPE = 'H'
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS HMOName,
+        STUFF((
+            SELECT ', ' + LTRIM(RTRIM(Sub.InsuranceName))
+            FROM PaymentSummary Sub
+            WHERE Sub.HOSPITALRECORDID = p.HOSPITALRECORDID
+            AND Sub.INSURANCETYPE = 'C'
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS CompanyName,
+
+        ---------------------------------reference ---------------------------------------            
+        STUFF((
+            SELECT LTRIM(RTRIM(Sub.REFERENCE))
+            FROM PaymentSummary Sub
+            WHERE Sub.HOSPITALRECORDID = p.HOSPITALRECORDID
+            AND Sub.INSURANCETYPE = 'H'
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS HMORef,
+        STUFF((
+            SELECT LTRIM(RTRIM(Sub.REFERENCE))
+            FROM PaymentSummary Sub
+            WHERE Sub.HOSPITALRECORDID = p.HOSPITALRECORDID
+            AND Sub.INSURANCETYPE = 'C'
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS CompanyRef,
+
+        ---------------------------------remarks ---------------------------------------
+        STUFF((
+            SELECT LTRIM(RTRIM(Sub.REMARKS))
+            FROM PaymentSummary Sub
+            WHERE Sub.HOSPITALRECORDID = p.HOSPITALRECORDID
+            AND Sub.INSURANCETYPE = 'C'
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS CompanyRemarks,
+
+        STUFF((
+            SELECT LTRIM(RTRIM(Sub.REMARKS))
+            FROM PaymentSummary Sub
+            WHERE Sub.HOSPITALRECORDID = p.HOSPITALRECORDID
+            AND Sub.INSURANCETYPE = 'H'
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS HMORemarks,
+
+
+        MIN(p.INSURANCETYPE) AS INSURANCETYPE
+    FROM PaymentSummary p
+    GROUP BY p.HOSPITALRECORDID
+)AR_PD ON AR_PD.HOSPITALRECORDID = HR.ID
+
+
+
+
+---------------------------------------PERSONAL --------------------------------------
+LEFT JOIN (
+    SELECT DISTINCT
+        
+        REFID,
+        SUM(COALESCE(AMOUNTDUE, 0)) AS ActualPaid, 
+        SUM(CASE WHEN COALESCE(DEPOSIT, 'N') = 'Y' THEN COALESCE(AMOUNTDUE, 0) ELSE 0 END) AS TotalDeposit,
+        SUM(CASE WHEN COALESCE(DEPOSIT, 'N') = 'N' THEN COALESCE(AMOUNTDUE, 0) ELSE 0 END) AS TotalPaid,
+        SUM(COALESCE(AMOUNTDUE, 0)) * 0.02 AS "Paid_WH",
+        SUM(COALESCE(AMOUNTDUE, 0)) - SUM(COALESCE(AMOUNTDUE, 0)) * 0.02 AS "TotalActualPaid",
+        STUFF((
+                SELECT CAST(RCPTNO AS CHAR) AS RCPTNO
+                FROM CHRNG_SALESHEADER AS Sub
+                WHERE Sub.REFID = Main.REFID -- Correlation using alias
+                FOR XML PATH(''), TYPE
+            ).value('.', 'NVARCHAR(MAX)'), 1, 2, ' ') AS Ref,
+
+        STUFF((
+                SELECT LTRIM(RTRIM(Sub.VOIDREMARKS))
+                FROM CHRNG_SALESHEADER Sub
+                WHERE Sub.REFID = Main.REFID -- Correlation using alias
+                FOR XML PATH(''), TYPE
+            ).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS Remarks
+
+    FROM CHRNG_SALESHEADER as Main
+    WHERE CANCELLED ='N'
+    GROUP BY REFID
+) C_SH ON HR.ID = C_SH.REFID
+
+LEFT JOIN (
+    SELECT
+        HOSPITALRECORDID,
+        SUM(PFAMOUNT) - (SUM(PFPHIC) + SUM(PFCOMP) + SUM(PFHMO) + SUM(PFDISCOUNT)) AS "BilledPF",
+        SUM(PFAMOUNT) - (SUM(PFPHIC) + SUM(PFCOMP) + SUM(PFHMO) + SUM(PFDISCOUNT)) * 0.02 AS "BilledPF_WH",
+        (SUM(PFAMOUNT) - (SUM(PFPHIC) + SUM(PFCOMP) + SUM(PFHMO) + SUM(PFDISCOUNT))) - (SUM(PFAMOUNT) - (SUM(PFPHIC) + SUM(PFCOMP) + SUM(PFHMO) + SUM(PFDISCOUNT)) * 0.02) AS "NetBilledPF"
+        --wh tax paid
+
+        FROM HIS_PFRECORD
+        WHERE CANCELLED ='N'
+        GROUP BY HOSPITALRECORDID
+)H_PF ON H_PF.HOSPITALRECORDID =  HR.ID
+
+LEFT JOIN (
+    SELECT
+        ID,
+        HOSPITALRECORDID,
+        ROW_NUMBER() OVER (PARTITION BY HOSPITALRECORDID ORDER BY ID) AS RN
+    FROM HIS_PFRECORD
+) HIS_PFRECORD ON HR.ID = HIS_PFRECORD.HOSPITALRECORDID
+AND HIS_PFRECORD.RN = 1
+
+
+-------------------------additional discount PF --------------------------
+
+LEFT JOIN(
+    SELECT
+        HOSPITALRECORDID,
+        SUM(AMOUNT) as  AMOUNT
+    FROM HIS_DISCOUNTRECORD
+
+    WHERE CANCELLED = 'N'
+    GROUP BY HOSPITALRECORDID
+)HIS_DISCOUNT ON HR.ID =  HIS_DISCOUNT.HOSPITALRECORDID
+
+
+-----------------------Personal (pf)--------------------------------------               
+LEFT JOIN (
+    SELECT 
+        PFRECORDID,
+        SUM(PFAMOUNT) AS "PaymentPF",
+        SUM(PFAMOUNT) * 0.02 AS "PaymentPF_WH"
+
+        FROM CHRNG_PFDETAIL
+        GROUP BY PFRECORDID
+)C_PF ON C_PF.PFRECORDID = HIS_PFRECORD.ID
+
+
+WHERE CAST(COALESCE(HR.DATETIMEDISCHARGED, DATETIMEADMITTED) AS DATE) BETWEEN ? AND ?
+--AND HR.ADMISSIONTYPE = 'OPD'
+AND HR.CANCELLED = 'N'
+
+
+-- ORDER BY HR.DATETIMEDISCHARGED
+ORDER BY CAST(coalesce(HR.DATETIMEDISCHARGED, HR.DATETIMEADMITTED) AS DATE), CONCAT(LTRIM(RTRIM(HR.LASTNAME)), ', ', LTRIM(RTRIM(HR.FIRSTNAME)))
