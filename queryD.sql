@@ -79,10 +79,10 @@ SELECT DISTINCT
     HOS_BILL.TotalActualPaymentPersonal AS "ACTUAL PERSONAL",
     C_SH.ActualPaid AS " PER_ACTUAL PAID",
     C_SH.TotalDeposit AS "DEPOSIT",
-    C_SH.TotalPaid AS "PAIDAMOUNT",
+    C_SH.ActualPaid - C_SH.PfPaid AS "PAIDAMOUNT",
     C_SH.Paid_WH as "PER_TOTAL WH TAX Source",
     C_SH.TotalActualPaid as "PER_TOTAL ACTUAL PAID",
-    HOS_BILL.TotalPersonalAmount - C_SH.ActualPaid AS "PERSONAL BALANCE",
+    ROUND(HOS_BILL.TotalPersonalAmount - (C_SH.ActualPaid - C_SH.PfPaid), 2)  AS "PERSONAL BALANCE",
     LTRIM(RTRIM(C_SH.Ref)) as PER_RECEIPT,
     LTRIM(RTRIM(C_SH.Remarks)) as PER_REMARKS,
 
@@ -391,6 +391,7 @@ LEFT JOIN (
         
         REFID,
         SUM(COALESCE(AMOUNTDUE, 0)) AS ActualPaid, 
+		SUM(COALESCE(PFDEPSHARE, 0)) AS PfPaid,
         SUM(CASE WHEN COALESCE(DEPOSIT, 'N') = 'Y' THEN COALESCE(AMOUNTDUE, 0) ELSE 0 END) AS TotalDeposit,
         SUM(CASE WHEN COALESCE(DEPOSIT, 'N') = 'N' THEN COALESCE(AMOUNTDUE, 0) ELSE 0 END) AS TotalPaid,
         SUM(COALESCE(AMOUNTDUE, 0)) * 0.02 AS "Paid_WH",
